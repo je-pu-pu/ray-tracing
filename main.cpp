@@ -11,6 +11,7 @@ const int h = 800;
 
 typedef float Real;
 typedef Eigen::Vector3f Vector;
+typedef Vector Color;
 
 struct Ray
 {
@@ -29,9 +30,11 @@ struct Hit
 struct Object
 {
 	Vector position;
+	Color color;
 
-	Object( const Vector& p )
+	Object( const Vector& p, const Color& c )
 		: position( p )
+		, color( c )
 	{
 
 	}
@@ -43,8 +46,8 @@ struct Sphere : public Object
 {
 	Real radius;
 
-	Sphere( const Vector& p, Real r )
-		: Object( p )
+	Sphere( const Vector& p, Real r, const Color& c )
+		: Object( p, c )
 		, radius( r )
 	{
 
@@ -61,7 +64,7 @@ struct Sphere : public Object
 struct Scene
 {
 	std::vector< std::unique_ptr< Object > > objects{
-		std::make_unique< Sphere >( Vector( 0, 0, 0 ), 1 )
+		std::make_unique< Sphere >( Vector( 0, 0, 0 ), 1, Color( 1, 0, 0 ) )
 	};
 
 	std::optional< Hit > intersect( const Ray& ray ) const
@@ -94,24 +97,34 @@ Real operator "" _r( long double x )
 	return static_cast< Real >( x );
 }
 
-int main( int, char** )
+void save_ppm( const std::string& file_name, Color* image )
 {
-	Vector v( 1.2_r, 2.3_r, 3.4_r );
-	v.normalize();
-
-	std::cout << "Hello." << std::endl;
-	std::cout << v << std::endl;
-
-	std::ofstream ofs( "result.ppm" );
+	std::ofstream ofs( file_name );
 
 	ofs << "P3\n" << w << " " << h << "\n255\n";
+
+	for ( int n = 0; n < w * h; n++ )
+	{
+		ofs << static_cast< int >( image[ n ].x() * 255 ) << " ";
+		ofs << static_cast< int >( image[ n ].y() * 255 ) << " ";
+		ofs << static_cast< int >( image[ n ].z() * 255 ) << "\n";
+	}
+}
+
+int main( int, char** )
+{
+	std::vector< Color > image{ w * h };
 
 	for ( int y = 0; y < h; y++ )
 	{
 		for ( int x = 0; x < w; x++ )
 		{
+			image[ y * w + x ] = Color( static_cast< Real >( x ) / ( w - 1 ), 0, static_cast< Real >( y ) / ( h - 1 ) );
+
 			// ofs << "255 127 127\n";
-			ofs << "255 0 255\n";
+			// ofs << "255 0 255\n";
 		}
 	}
+
+	save_ppm( "result.ppm", & image[ 0 ] );
 }
