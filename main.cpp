@@ -24,7 +24,7 @@ struct Object;
 struct Hit
 {
 	Real distance;
-	Object* object;
+	const Object* object;
 };
 
 struct Object
@@ -35,6 +35,11 @@ struct Object
 	Object( const Vector& p, const Color& c )
 		: position( p )
 		, color( c )
+	{
+
+	}
+
+	virtual ~Object()
 	{
 
 	}
@@ -53,8 +58,25 @@ struct Sphere : public Object
 
 	}
 
+	~Sphere() override
+	{
+
+	}
+
+	/**
+	 * .
+	 * 
+	 * @todo ŽÀ‘•‚·‚é
+	 * @param ray
+	 * @return 
+	 */
 	std::optional< Hit > intersect( const Ray& ray ) const override
 	{
+		Hit hit;
+		hit.object = this;
+
+		return hit;
+
 		// ray.
 
 		return std::nullopt;
@@ -63,19 +85,19 @@ struct Sphere : public Object
 
 struct Scene
 {
-	std::vector< std::unique_ptr< Object > > objects{
-		std::make_unique< Sphere >( Vector( 0, 0, 0 ), 1, Color( 1, 0, 0 ) )
+	std::vector< Sphere > objects = {
+		Sphere( Vector( 0, 0, 0 ), 1, Color( 1, 0, 0 ) )
 	};
 
 	std::optional< Hit > intersect( const Ray& ray ) const
 	{
 		Hit hit;
-		hit.distance =  std::numeric_limits< Real >::max();
+		hit.distance = std::numeric_limits< Real >::max();
 		hit.object = nullptr;
 
 		for ( const auto& object : objects )
 		{
-			auto result = object->intersect( ray );
+			auto result = object.intersect( ray );
 
 			if ( result && result->distance < hit.distance )
 			{
@@ -113,13 +135,40 @@ void save_ppm( const std::string& file_name, Color* image )
 
 int main( int, char** )
 {
+	/*
+	Vector a{ 1, 2, 3 };
+
+	a.normalize();
+
+	std::cout << "a dot a =" << a.dot( a ) << std::endl;
+	std::cout << "a * a =" << a.norm() * a.norm() << std::endl;
+
+	return 0;
+	*/
+
 	std::vector< Color > image{ w * h };
 
+	Scene scene;
+
+	#pragma omp parallel for
 	for ( int y = 0; y < h; y++ )
 	{
+		std::cout << "Rendering ( y = " << y << " ) ( " << ( 100.f * y / ( h - 1 ) ) << " % )" << std::endl;
+
 		for ( int x = 0; x < w; x++ )
 		{
-			image[ y * w + x ] = Color( static_cast< Real >( x ) / ( w - 1 ), 0, static_cast< Real >( y ) / ( h - 1 ) );
+			Ray ray; /// @todo ƒŒƒC‚Ì•ûŒü‚ðÝ’è‚·‚é
+
+			auto hit = scene.intersect( ray );
+
+			if ( hit )
+			{
+				image[ y * w + x ] = hit.value().object->color;
+			}
+			else
+			{
+				image[ y * w + x ] = Color( static_cast< Real >( x ) / ( w - 1 ), 0, static_cast< Real >( y ) / ( h - 1 ) );
+			}
 
 			// ofs << "255 127 127\n";
 			// ofs << "255 0 255\n";
