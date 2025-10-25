@@ -6,8 +6,8 @@
 #include <optional>
 #include <vector>
 
-const int w = 1200;
-const int h = 800;
+const int IMAGE_WIDTH = 1200; /// 出力する画像の横幅
+const int IMAGE_HEIGHT = 800; /// 出力する画像の高さ
 
 typedef float Real;
 typedef Eigen::Vector3f Vector;
@@ -72,12 +72,10 @@ struct Sphere : public Object
 	 */
 	std::optional< Hit > intersect( const Ray& ray ) const override
 	{
+		return std::nullopt;
+
 		Hit hit;
 		hit.object = this;
-
-		return hit;
-
-		// ray.
 
 		return std::nullopt;
 	}
@@ -123,9 +121,9 @@ void save_ppm( const std::string& file_name, Color* image )
 {
 	std::ofstream ofs( file_name );
 
-	ofs << "P3\n" << w << " " << h << "\n255\n";
+	ofs << "P3\n" << IMAGE_WIDTH << " " << IMAGE_HEIGHT << "\n255\n";
 
-	for ( int n = 0; n < w * h; n++ )
+	for ( int n = 0; n < IMAGE_WIDTH * IMAGE_HEIGHT; n++ )
 	{
 		ofs << static_cast< int >( image[ n ].x() * 255 ) << " ";
 		ofs << static_cast< int >( image[ n ].y() * 255 ) << " ";
@@ -146,28 +144,33 @@ int main( int, char** )
 	return 0;
 	*/
 
-	std::vector< Color > image{ w * h };
+	std::vector< Color > image{ IMAGE_WIDTH * IMAGE_HEIGHT };
 
 	Scene scene;
 
-	#pragma omp parallel for
-	for ( int y = 0; y < h; y++ )
-	{
-		std::cout << "Rendering ( y = " << y << " ) ( " << ( 100.f * y / ( h - 1 ) ) << " % )" << std::endl;
+	Vector camera_position{ 0.f, 0.f, -5.f };
+	Vector screen_center{ 0.f, 0.f, 0.f };
 
-		for ( int x = 0; x < w; x++ )
+	#pragma omp parallel for
+	for ( int y = 0; y < IMAGE_HEIGHT; y++ )
+	{
+		std::cout << "Rendering ( y = " << y << " ) ( " << ( 100.f * y / ( IMAGE_HEIGHT - 1 ) ) << " % )" << std::endl;
+
+		for ( int x = 0; x < IMAGE_WIDTH; x++ )
 		{
-			Ray ray; /// @todo レイの方向を設定する
+			Vector screen_position{ 0, 0, 0 }; // x, y に対応するスクリーンの位置
+
+			Ray ray{ camera_position, ( screen_position - camera_position ).normalized() };
 
 			auto hit = scene.intersect( ray );
 
 			if ( hit )
 			{
-				image[ y * w + x ] = hit.value().object->color;
+				image[ y * IMAGE_WIDTH + x ] = hit.value().object->color;
 			}
 			else
 			{
-				image[ y * w + x ] = Color( static_cast< Real >( x ) / ( w - 1 ), 0, static_cast< Real >( y ) / ( h - 1 ) );
+				image[ y * IMAGE_WIDTH + x ] = Color( static_cast< Real >( x ) / ( IMAGE_WIDTH - 1 ), 0, static_cast< Real >( y ) / ( IMAGE_HEIGHT - 1 ) );
 			}
 
 			// ofs << "255 127 127\n";
