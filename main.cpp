@@ -66,7 +66,7 @@ struct Sphere : public Object
 	/**
 	 * .
 	 * 
-	 * @todo À‘•‚·‚é
+	 * @todo å®Ÿè£…ã™ã‚‹
 	 * @param ray
 	 * @return 
 	 */
@@ -157,7 +157,7 @@ int main( int, char** )
 
 		for ( int x = 0; x < w; x++ )
 		{
-			Ray ray; /// @todo ƒŒƒC‚Ì•ûŒü‚ğİ’è‚·‚é
+			Ray ray; /// @todo ãƒ¬ã‚¤ã®æ–¹å‘ã‚’è¨­å®šã™ã‚‹
 
 			auto hit = scene.intersect( ray );
 
