@@ -19,6 +19,7 @@
 #include <numbers>
 #include <chrono>
 #include <format>
+#include <random>
 
 typedef float Real;
 typedef Eigen::Vector3f Vector;
@@ -33,6 +34,7 @@ static constexpr Real operator "" _r( long double x )
 constexpr int IMAGE_WIDTH = 1200; /// 出力する画像の横幅
 constexpr int IMAGE_HEIGHT = 800; /// 出力する画像の高さ
 constexpr Real IMAGE_ASPECT = static_cast< Real >( IMAGE_WIDTH ) / static_cast< Real >( IMAGE_HEIGHT ); /// 画像のアスペクト比
+constexpr int IMAGE_SAMPLE_COUNT = 32; /// マルチサンプリングのサンプル数
 
 static constexpr Real degree_to_radian( Real degrre ) { return degrre * std::numbers::pi_v< Real > / 180._r; }
 static constexpr Real radian_to_degree( Real radian ) { return radian * 180._r / std::numbers::pi_v< Real >; }
@@ -116,7 +118,8 @@ struct Scene
 	std::vector< Sphere > objects = {
 		Sphere( Vector( -2.5_r, 0.0_r, 0 ), 0.5_r, Color( 1.0_r, 0.25_r, 0.25_r ) ),
 		Sphere( Vector(  0.0_r, 0.0_r, 0 ), 1.0_r, Color( 0.25_r, 1.0_r, 0.25_r ) ),
-		Sphere( Vector(  2.5_r, 0.0_r, 0 ), 1.5_r, Color( 0.25_r, 0.25_r, 1.0_r ) )
+		Sphere( Vector(  2.5_r, 0.0_r, 0 ), 1.5_r, Color( 0.25_r, 0.25_r, 1.0_r ) ),
+		Sphere( Vector(  0.0_r, -101.0_r, 0 ), 100._r, Color( 0.75_r, 0.75_r, 0.75_r ) ),
 	};
 
 	std::optional< Hit > intersect( const Ray& ray ) const
@@ -177,6 +180,10 @@ static void save_image( const Image& image )
 
 int main( int, char** )
 {
+	std::random_device random_device;
+	std::mt19937 random_generator{ random_device() };
+	std::uniform_real_distribution< Real > random_distribution{ -0.5_r, 0.5_r };
+
 	/*
 	Vector a{ 1, 2, 3 };
 
@@ -205,36 +212,43 @@ int main( int, char** )
 	{
 		std::cout << "Rendering ( y = " << y << " ) ( " << ( 100.f * y / ( IMAGE_HEIGHT - 1 ) ) << " % )" << std::endl;
 
-		// カメラの中心からスクリーン上の y 座標に対応する位置までの回転角度 ( カメラの X 軸回転 )
-		const Real yr = ( camera_fov / 2._r ) - camera_fov * ( static_cast< Real >( y ) / ( IMAGE_HEIGHT - 1 ) );
-		// std::cout << yr << std::endl;
-
-		const Eigen::AngleAxis< Real > rot_y( degree_to_radian( yr ), camera_right );
-
 		for ( int x = 0; x < IMAGE_WIDTH; x++ )
 		{
-			// カメラの中心からスクリーン上の x 座標に対応する位置までの回転角度 ( カメラの Y 軸回転 )
-			const Real xr = ( camera_fov * IMAGE_ASPECT / 2._r ) - camera_fov * IMAGE_ASPECT * ( static_cast< Real >( x ) / ( IMAGE_WIDTH - 1 ) );
-			// std::cout << xr << std::endl;
+			Color color{ 0, 0, 0 };
 
-			const Eigen::AngleAxis< Real > rot_x( degree_to_radian( xr ), camera_up );
-			// std::cout << d << std::endl;
-
-			Ray ray{ camera_position, rot_x * rot_y * camera_direction };
-
-			auto hit = scene.intersect( ray );
-
-			if ( hit )
+			for ( int n = 0; n < IMAGE_SAMPLE_COUNT; n++ )
 			{
-				image[ y * IMAGE_WIDTH + x ] = hit.value().object->color;
-			}
-			else
-			{
-				image[ y * IMAGE_WIDTH + x ] = Color( static_cast< Real >( x ) / ( IMAGE_WIDTH - 1 ), 0, static_cast< Real >( y ) / ( IMAGE_HEIGHT - 1 ) );
+				const Real y_offset = random_distribution( random_generator );
+				const Real x_offset = random_distribution( random_generator );
+
+				// カメラの中心からスクリーン上の y 座標に対応する位置までの回転角度 ( カメラの X 軸回転 )
+				const Real yr = ( camera_fov / 2._r ) - camera_fov * ( static_cast< Real >( y + y_offset ) / ( IMAGE_HEIGHT - 1 ) );
+				// std::cout << yr << std::endl;
+
+				const Eigen::AngleAxis< Real > rot_y( degree_to_radian( yr ), camera_right );
+
+				// カメラの中心からスクリーン上の x 座標に対応する位置までの回転角度 ( カメラの Y 軸回転 )
+				const Real xr = ( camera_fov * IMAGE_ASPECT / 2._r ) - camera_fov * IMAGE_ASPECT * ( static_cast< Real >( x + x_offset ) / ( IMAGE_WIDTH - 1 ) );
+				// std::cout << xr << std::endl;
+
+				const Eigen::AngleAxis< Real > rot_x( degree_to_radian( xr ), camera_up );
+				// std::cout << d << std::endl;
+
+				Ray ray{ camera_position, rot_x * rot_y * camera_direction };
+
+				auto hit = scene.intersect( ray );
+
+				if ( hit )
+				{
+					color += hit.value().object->color;
+				}
+				else
+				{
+					color += Color( static_cast< Real >( x ) / ( IMAGE_WIDTH - 1 ), 0, static_cast< Real >( y ) / ( IMAGE_HEIGHT - 1 ) );
+				}
 			}
 
-			// ofs << "255 127 127\n";
-			// ofs << "255 0 255\n";
+			image[ y * IMAGE_WIDTH + x ] = color / static_cast< Real >( IMAGE_SAMPLE_COUNT );
 		}
 	}
 
