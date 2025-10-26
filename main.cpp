@@ -88,34 +88,40 @@ struct Sphere : public Object
 	}
 
 	/**
-	 * .
+	 * レイと球の交差判定
 	 * 
-	 * @todo 実装する
-	 * @param ray
-	 * @return 
+	 * @todo 理解する
+	 * @param ray 判定するレイ
+	 * @return レイと球が交差しない場合は std::nullopt を返す。交差する場合は Hit 構造体を返す。
 	 */
 	std::optional< Hit > intersect( const Ray& ray ) const override
 	{
-		return std::nullopt;
+		const Vector oc = ray.origin - position;
+		float a = ray.direction.dot( ray.direction );
+		float b = 2._r * ray.direction.dot( oc );
+		float c = oc.dot( oc ) - std::pow( radius, 2 );
+		float D = b * b - 4 * a * c;
+		
+		if ( D <= 0 )
+		{
+			return std::nullopt;
+		}
 
-		Hit hit;
-		hit.object = this;
-
-		return std::nullopt;
+		return Hit{ .distance = 0, .object = this };
 	}
 };
 
 struct Scene
 {
 	std::vector< Sphere > objects = {
-		Sphere( Vector( 0, 0, 0 ), 1, Color( 1, 0, 0 ) )
+		Sphere( Vector( -2.5_r, 0.0_r, 0 ), 0.5_r, Color( 1.0_r, 0.25_r, 0.25_r ) ),
+		Sphere( Vector(  0.0_r, 0.0_r, 0 ), 1.0_r, Color( 0.25_r, 1.0_r, 0.25_r ) ),
+		Sphere( Vector(  2.5_r, 0.0_r, 0 ), 1.5_r, Color( 0.25_r, 0.25_r, 1.0_r ) )
 	};
 
 	std::optional< Hit > intersect( const Ray& ray ) const
 	{
-		Hit hit;
-		hit.distance = std::numeric_limits< Real >::max();
-		hit.object = nullptr;
+		Hit hit{ .distance = std::numeric_limits< Real >::max(), .object = nullptr };
 
 		for ( const auto& object : objects )
 		{
@@ -186,7 +192,7 @@ int main( int, char** )
 
 	Scene scene;
 
-	Vector camera_position{ 0, 0, 5 };
+	Vector camera_position{ 0, 0, 3 };
 	Vector camera_direction = Vector{ 0, 0, -1 }.normalized();
 	Vector camera_up = Vector{ 0, 1, 0 }.normalized();
 	Vector camera_right = camera_direction.cross( camera_up ).normalized();

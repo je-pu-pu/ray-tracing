@@ -6,3 +6,7 @@
 
 [GitHub - githole/edupt: パストレーシングベースの物理ベースレンダラ。](https://github.com/githole/edupt)
 [https://kagamin.net/hole/edupt/edupt_v103.pdf](https://kagamin.net/hole/edupt/edupt_v103.pdf)
+
+[はじめに - 週末レイトレーシング 第一週 (翻訳) - inzkyk.xyz](https://inzkyk.xyz/ray_tracing_in_one_weekend/week_1/1_1_overview/)
+
+[レイトレーシング入門](https://zenn.dev/mebiusbox/books/8d9c42883df9f6)
