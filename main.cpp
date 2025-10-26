@@ -1,23 +1,31 @@
-/*********************************************************************
+﻿/*********************************************************************
  * @file   main.cpp
  * @brief  レイトレーシングの練習。右手座標系。
  * @date   2025-10-26
  *********************************************************************/
 
-#define _SILENCE_CXX17_NEGATORS_DEPRECATION_WARNING
 
+#define _CRT_SECURE_NO_WARNINGS
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h" // https://github.com/nothings/stb
+
+// #define _SILENCE_CXX17_NEGATORS_DEPRECATION_WARNING
 #include "Eigen/Dense"
+
 #include <iostream>
 #include <fstream>
 #include <optional>
 #include <vector>
 #include <numbers>
+#include <chrono>
+#include <format>
 
 typedef float Real;
 typedef Eigen::Vector3f Vector;
 typedef Vector Color;
+typedef std::vector< Color > Image;
 
-constexpr Real operator "" _r( long double x )
+static constexpr Real operator "" _r( long double x )
 {
 	return static_cast< Real >( x );
 }
@@ -26,8 +34,8 @@ constexpr int IMAGE_WIDTH = 1200; /// 出力する画像の横幅
 constexpr int IMAGE_HEIGHT = 800; /// 出力する画像の高さ
 constexpr Real IMAGE_ASPECT = static_cast< Real >( IMAGE_WIDTH ) / static_cast< Real >( IMAGE_HEIGHT ); /// 画像のアスペクト比
 
-constexpr Real degree_to_radian( Real degrre ) { return degrre * std::numbers::pi_v< Real > / 180._r; }
-constexpr Real radian_to_degree( Real radian ) { return radian * 180._r / std::numbers::pi_v< Real >; }
+static constexpr Real degree_to_radian( Real degrre ) { return degrre * std::numbers::pi_v< Real > / 180._r; }
+static constexpr Real radian_to_degree( Real radian ) { return radian * 180._r / std::numbers::pi_v< Real >; }
 
 struct Ray
 {
@@ -128,7 +136,7 @@ struct Scene
 	}
 };
 
-void save_ppm( const std::string& file_name, Color* image )
+static void save_ppm( const std::string& file_name, Color* image )
 {
 	std::ofstream ofs( file_name );
 
@@ -140,6 +148,25 @@ void save_ppm( const std::string& file_name, Color* image )
 		ofs << static_cast< int >( image[ n ].y() * 255 ) << " ";
 		ofs << static_cast< int >( image[ n ].z() * 255 ) << "\n";
 	}
+}
+
+static void save_image( const Image& image )
+{
+	std::vector< std::uint8_t > data( IMAGE_WIDTH * IMAGE_HEIGHT * 3 );
+
+	int n = 0;
+
+	for ( const Color& color: image )
+	{
+		data[ n * 3 + 0 ] = static_cast< std::uint8_t >( color.x() * 255 );
+		data[ n * 3 + 1 ] = static_cast< std::uint8_t >( color.y() * 255 );
+		data[ n * 3 + 2 ] = static_cast< std::uint8_t >( color.z() * 255 );
+
+		n++;
+	}
+
+	const auto now = std::chrono::zoned_time{ std::chrono::current_zone(), std::chrono::floor< std::chrono::seconds >( std::chrono::system_clock::now() ) }.get_local_time();
+	stbi_write_png( std::format( "{:%Y%m%d-%H%M}.png", now ).c_str(), IMAGE_WIDTH, IMAGE_HEIGHT, 3, data.data(), IMAGE_WIDTH * 3 );
 }
 
 int main( int, char** )
@@ -205,7 +232,7 @@ int main( int, char** )
 		}
 	}
 
-	save_ppm( "result.ppm", & image[ 0 ] );
+	save_image( image );
 
 	return 0;
 }
