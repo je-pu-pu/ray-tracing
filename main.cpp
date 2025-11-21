@@ -69,11 +69,13 @@ struct Object
 	Vector position;
 	Color color;
 	Real roughness; /// 物体の粗さ (0.0: 完全鏡面反射, 1.0: 完全拡散反射)
+	bool emit_light = false; /// 光を放出するかどうか
 
-	Object( const Vector& p, const Color& c, Real rough )
+	Object( const Vector& p, const Color& c, Real rough, bool emit )
 		: position( p )
 		, color( c )
 		, roughness( rough )
+		, emit_light( emit )
 	{
 
 	}
@@ -93,8 +95,8 @@ struct Sphere : public Object
 {
 	Real radius; /// 球の半径
 
-	Sphere( const Vector& p, Real r, const Color& c, Real rough )
-		: Object( p, c, rough )
+	Sphere( const Vector& p, Real r, const Color& c, Real rough, bool emit )
+		: Object( p, c, rough, emit )
 		, radius( r )
 	{
 
@@ -144,12 +146,25 @@ struct Sphere : public Object
 struct Scene
 {
 	std::vector< Sphere > objects = {
-		Sphere{ Vector( -3.5_r, 0.0_r, 0 ), 0.25_r, Color( 1.0_r, 0.5_r, 0.5_r ), 0._r },
-		Sphere{ Vector( -2.5_r, 0.0_r, 0 ), 0.5_r, Color( 1.0_r, 1._r, 1._r ), 0._r },
-		Sphere{ Vector( -1.0_r, 0.0_r, -2.5_r ), 1.0_r, Color( 0.5_r, 1.0_r, 0.5_r ), 0.01_r },
-		Sphere{ Vector(  2.5_r, 0.0_r, 0 ), 2.0_r, Color( 0.5_r, 0.5_r, 1.0_r ), 0._r },
-		Sphere{ Vector(  0.0_r, -101.0_r, 0 ), 100._r, Color( 1._r, 1._r, 1._r ), 1._r },
+		Sphere{ Vector( -3.5_r, 0.25_r, 0 ), 0.25_r, Color( 1.0_r, 0.5_r, 0.5_r ), 0._r, false },
+		Sphere{ Vector( -2.5_r, 0.5_r, 0 ), 0.5_r, Color( 1._r, 1._r, 1._r ), 0._r, false },
+		Sphere{ Vector( -1.5_r, 0.5_r, -1._r ), 0.5_r, Color( 1._r, 1._r, 1._r ), 1._r, false },
+		Sphere{ Vector( -0.5_r, 1._r, -2.5_r ), 1.0_r, Color( 0.5_r, 1.0_r, 0.5_r ), 0.05_r, false },
+		Sphere{ Vector(  2.5_r, 2.0_r, 0 ), 2.0_r, Color( 0.5_r, 0.5_r, 1.0_r ), 0.2_r, false },
+		Sphere{ Vector(  0.0_r, -10000.0_r, 0 ), 10000._r, Color( 1._r, 1._r, 1._r ), 1._r, false }, // 床
+		// Sphere{ Vector(  0.0_r, 15.0_r, 0._r ), 10._r, Color( 1._r, 1._r, 1._r ), 1._r, true }, // 光源
+		Sphere{ Vector(  0.0_r, 0.25_r, 1._r ), 0.25_r, Color( 1._r, 1._r, 1._r ), 1._r, true }, // 光源
+		Sphere{ Vector(  -3.0_r, 0.25_r, 2._r ), 0.25_r, Color( 1._r, 0._r, 0._r ), 1._r, true }, // 光源
+		Sphere{ Vector(  2.0_r, 0.25_r, 3._r ), 0.25_r, Color( 0._r, 0._r, 1._r ), 1._r, true }, // 光源
 	};
+
+	Scene()
+	{
+		for ( int n = 0; n < 10; n++ )
+		{
+			objects.emplace_back( Vector( -3.5_r, 0.25_r + ( n + 1 ) * 0.5_r, 0 ), 0.25_r, Color( 1.0_r, 0.5_r, 0.5_r ), 0.1_r * n, false );
+		}
+	}
 
 	std::optional< Hit > intersect( const Ray& ray ) const
 	{
@@ -196,9 +211,9 @@ static void save_image( const Image& image )
 
 	for ( const Color& color: image )
 	{
-		data[ n * 3 + 0 ] = static_cast< std::uint8_t >( color.x() * 255 );
-		data[ n * 3 + 1 ] = static_cast< std::uint8_t >( color.y() * 255 );
-		data[ n * 3 + 2 ] = static_cast< std::uint8_t >( color.z() * 255 );
+		data[ n * 3 + 0 ] = static_cast< std::uint8_t >( std::clamp( color.x(), 0._r, 1._r ) * 255 );
+		data[ n * 3 + 1 ] = static_cast< std::uint8_t >( std::clamp( color.y(), 0._r, 1._r ) * 255 );
+		data[ n * 3 + 2 ] = static_cast< std::uint8_t >( std::clamp( color.z(), 0._r, 1._r ) * 255 );
 
 		n++;
 	}
@@ -228,10 +243,16 @@ Vector random_vector_in_unit_sphere()
 	while ( true );
 }
 
+Vector lerp( Real t, Vector a, Vector b )
+{
+	return (1._r - t ) * a + t * b;
+}
+
 Vector calc_color( const Scene& scene, const Ray ray, int depth = 0 )
 {
-	if ( depth >= 5 )
+	if ( depth >= 50 )
 	{
+		// return Color{ 1, 1, 1 };
 		return Color{ 0, 0, 0 };
 	}
 
@@ -239,16 +260,37 @@ Vector calc_color( const Scene& scene, const Ray ray, int depth = 0 )
 
 	if ( ! hit_opt )
 	{
-		return Color( 0.5_r, 0.7_r, 1.0_r ); // 背景色
+		// return Color( 1._r, 0._r, 0._r ); // 背景色
+		// return Color( 0.5_r, 0.7_r, 1.0_r ); // 背景色
+
+		Vector ground_color{ 0.5_r, 0.7_r, 1._r };
+		Vector sky_color{ 1._r, 1._r, 1._r };
+		// Vector sky_color{ 0._r, 0._r, 0._r };
+
+		return lerp( ray.direction.normalized().y() * 0.5_r + 0.5_r, ground_color, sky_color );
 	}
 
 	const auto hit = hit_opt.value();
+
+	// 光を放出する物体に当たった場合、その色を返す
+	if ( hit.object->emit_light )
+	{
+		return hit.object->color;
+	}
+
+	/*
+	if ( depth >= 3 )
+	{
+		return Color( 0._r, 0._r, 0._r );
+		// return hit.object->color;
+	}
+	*/
 
 	// return 0.5_r * ( normal + Vector{ 1._r, 1._r, 1._r } ); //  * hit.object->color;
 
 	const auto normal = ( ( hit.position + hit.normal + random_vector_in_unit_sphere() * hit.object->roughness ) - hit.position ).normalized();
 
-	return hit.object->color.cwiseProduct( 0.5_r * calc_color( scene, Ray{ .origin = hit.position, .direction = normal }, depth + 1 ) );
+	return hit.object->color.cwiseProduct( 0.75_r * calc_color( scene, Ray{ .origin = hit.position, .direction = normal }, depth + 1 ) );
 }
 
 int main( int, char** )
@@ -270,11 +312,13 @@ int main( int, char** )
 
 	Scene scene;
 
-	Vector camera_position{ 0, 0, 3 };
-	Vector camera_direction = Vector{ 0, 0, -1 }.normalized();
-	Vector camera_up = Vector{ 0, 1, 0 }.normalized();
+	Vector camera_position{ 0, 1.5, 6 };
+	Vector camera_direction = Vector{ 0, 0, -3 }.normalized();
+	Vector camera_up = Vector{ -0.1_r, 1, 0 }.normalized();
 	Vector camera_right = camera_direction.cross( camera_up ).normalized();
-	constexpr Real camera_fov = 90._r;
+	camera_up = camera_right.cross( camera_direction ).normalized();
+
+	constexpr Real camera_fov = 60._r;
 
 	Vector screen_center{ 0.f, 0.f, 0.f };
 
