@@ -34,7 +34,10 @@ static constexpr Real operator "" _r( long double x )
 constexpr int IMAGE_WIDTH = 1200; /// 出力する画像の横幅
 constexpr int IMAGE_HEIGHT = 800; /// 出力する画像の高さ
 constexpr Real IMAGE_ASPECT = static_cast< Real >( IMAGE_WIDTH ) / static_cast< Real >( IMAGE_HEIGHT ); /// 画像のアスペクト比
-constexpr int IMAGE_SAMPLE_COUNT = 1; /// マルチサンプリングのサンプル数
+constexpr int IMAGE_SAMPLE_COUNT = 32; /// マルチサンプリングのサンプル数
+
+std::random_device random_device;
+thread_local std::mt19937 random_generator{ random_device() };
 
 static constexpr Real degree_to_radian( Real degrre ) { return degrre * std::numbers::pi_v< Real > / 180._r; }
 static constexpr Real radian_to_degree( Real radian ) { return radian * 180._r / std::numbers::pi_v< Real >; }
@@ -54,8 +57,10 @@ struct Object;
 
 struct Hit
 {
-	const Ray* ray;
-	Real distance; /// レイの始点から交差点までの距離
+	Real distance; // レイの始点から交差位置までの距離
+	Vector position; // 交差位置
+	Vector normal; // 交差位置の法線ベクトル
+
 	const Object* object;
 };
 
@@ -63,10 +68,12 @@ struct Object
 {
 	Vector position;
 	Color color;
+	Real roughness; /// 物体の粗さ (0.0: 完全鏡面反射, 1.0: 完全拡散反射)
 
-	Object( const Vector& p, const Color& c )
+	Object( const Vector& p, const Color& c, Real rough )
 		: position( p )
 		, color( c )
+		, roughness( rough )
 	{
 
 	}
@@ -79,12 +86,15 @@ struct Object
 	virtual std::optional< Hit > intersect( const Ray& ) const = 0;
 };
 
+/**
+ * 球
+ */
 struct Sphere : public Object
 {
-	Real radius;
+	Real radius; /// 球の半径
 
-	Sphere( const Vector& p, Real r, const Color& c )
-		: Object( p, c )
+	Sphere( const Vector& p, Real r, const Color& c, Real rough )
+		: Object( p, c, rough )
 		, radius( r )
 	{
 
@@ -118,30 +128,32 @@ struct Sphere : public Object
 		Real t1 = ( -b - sqrtf( D ) ) / ( 2._r * a );
 		Real t2 = ( -b + sqrtf( D ) ) / ( 2._r * a );
 
-		Real t = ( t1 > 0 ) ? t1 : ( ( t2 > 0 ) ? t2 : -1 );
+		Real t = ( t1 > 0) ? t1 : ( ( t2 > 0 ) ? t2 : -1 );
 		
-		if ( t < 0 )
+		if ( t < 0.001_r )
 		{
 			return std::nullopt;
 		}
 
-		return Hit{ .ray = & ray, .distance = t, .object = this };
+		const auto hit_position = ray.at( t );
+
+		return Hit{ .distance = t, .position = hit_position , .normal = ( hit_position - position ).normalized(), .object = this };
 	}
 };
 
 struct Scene
 {
 	std::vector< Sphere > objects = {
-		Sphere( Vector( -3.5_r, 0.0_r, 0 ), 0.25_r, Color( 1.0_r, 0.25_r, 0.25_r ) ),
-		Sphere( Vector( -2.5_r, 0.0_r, 0 ), 0.5_r, Color( 1.0_r, 0.25_r, 0.25_r ) ),
-		Sphere( Vector(  0.0_r, 0.0_r, 0 ), 1.0_r, Color( 0.25_r, 1.0_r, 0.25_r ) ),
-		Sphere( Vector(  2.5_r, 0.0_r, 0 ), 2.0_r, Color( 0.25_r, 0.25_r, 1.0_r ) ),
-		Sphere( Vector(  0.0_r, -101.0_r, 0 ), 100._r, Color( 0.75_r, 0.75_r, 0.75_r ) ),
+		Sphere{ Vector( -3.5_r, 0.0_r, 0 ), 0.25_r, Color( 1.0_r, 0.5_r, 0.5_r ), 0._r },
+		Sphere{ Vector( -2.5_r, 0.0_r, 0 ), 0.5_r, Color( 1.0_r, 1._r, 1._r ), 0._r },
+		Sphere{ Vector( -1.0_r, 0.0_r, -2.5_r ), 1.0_r, Color( 0.5_r, 1.0_r, 0.5_r ), 0.01_r },
+		Sphere{ Vector(  2.5_r, 0.0_r, 0 ), 2.0_r, Color( 0.5_r, 0.5_r, 1.0_r ), 0._r },
+		Sphere{ Vector(  0.0_r, -101.0_r, 0 ), 100._r, Color( 1._r, 1._r, 1._r ), 1._r },
 	};
 
 	std::optional< Hit > intersect( const Ray& ray ) const
 	{
-		Hit hit{ .ray = & ray, .distance = std::numeric_limits< Real >::max(), .object = nullptr };
+		Hit hit{ .distance = std::numeric_limits< Real >::max(), .object = nullptr };
 
 		for ( const auto& object : objects )
 		{
@@ -195,10 +207,52 @@ static void save_image( const Image& image )
 	stbi_write_png( std::format( "{:%Y%m%d-%H%M}.png", now ).c_str(), IMAGE_WIDTH, IMAGE_HEIGHT, 3, data.data(), IMAGE_WIDTH * 3 );
 }
 
+/**
+ * 半径 1 の円の中に収まるランダムなベクトルを生成する
+ 
+ * @return 半径 1 の円の中に収まるランダムなベクトル
+ */
+Vector random_vector_in_unit_sphere()
+{
+	std::uniform_real_distribution< Real > random_distribution{ -1._r, 1._r };
+
+    do
+	{
+		Vector v { random_distribution( random_generator ), random_distribution( random_generator ), random_distribution( random_generator ) };
+
+		if ( v.norm() < 1.f )
+		{
+			return v;
+		}
+    }
+	while ( true );
+}
+
+Vector calc_color( const Scene& scene, const Ray ray, int depth = 0 )
+{
+	if ( depth >= 5 )
+	{
+		return Color{ 0, 0, 0 };
+	}
+
+	auto hit_opt = scene.intersect( ray );
+
+	if ( ! hit_opt )
+	{
+		return Color( 0.5_r, 0.7_r, 1.0_r ); // 背景色
+	}
+
+	const auto hit = hit_opt.value();
+
+	// return 0.5_r * ( normal + Vector{ 1._r, 1._r, 1._r } ); //  * hit.object->color;
+
+	const auto normal = ( ( hit.position + hit.normal + random_vector_in_unit_sphere() * hit.object->roughness ) - hit.position ).normalized();
+
+	return hit.object->color.cwiseProduct( 0.5_r * calc_color( scene, Ray{ .origin = hit.position, .direction = normal }, depth + 1 ) );
+}
+
 int main( int, char** )
 {
-	std::random_device random_device;
-	std::mt19937 random_generator{ random_device() };
 	std::uniform_real_distribution< Real > random_distribution{ -0.5_r, 0.5_r };
 
 	/*
@@ -227,7 +281,10 @@ int main( int, char** )
 	#pragma omp parallel for
 	for ( int y = 0; y < IMAGE_HEIGHT; y++ )
 	{
-		std::cout << "Rendering ( y = " << y << " ) ( " << ( 100.f * y / ( IMAGE_HEIGHT - 1 ) ) << " % )" << std::endl;
+		if ( omp_get_thread_num() == 0 )
+		{
+			std::cout << "Rendering ( y = " << y << " ) ( " << ( 100.f * y / ( IMAGE_HEIGHT - 1 ) ) << " % )" << std::endl;
+		}
 
 		for ( int x = 0; x < IMAGE_WIDTH; x++ )
 		{
@@ -253,12 +310,12 @@ int main( int, char** )
 
 				Ray ray{ camera_position, ( rot_x * rot_y * camera_direction ).normalized() };
 
-				auto hit = scene.intersect( ray );
+				color += calc_color( scene, ray );
 
+				/*
 				if ( hit )
 				{
-					Vector N = ( hit.value().ray->at( hit.value().distance ) - hit.value().object->position ).normalized();
-					color += 0.5_r * ( N + Vector( 1._r, 1._r, 1._r ) );
+					
 
 					// color += hit.value().object->color;
 				}
@@ -266,6 +323,7 @@ int main( int, char** )
 				{
 					// color += Color( static_cast< Real >( x ) / ( IMAGE_WIDTH - 1 ), 0, static_cast< Real >( y ) / ( IMAGE_HEIGHT - 1 ) );
 				}
+				*/
 			}
 
 			image[ y * IMAGE_WIDTH + x ] = color / static_cast< Real >( IMAGE_SAMPLE_COUNT );
