@@ -34,7 +34,7 @@ static constexpr Real operator "" _r( long double x )
 constexpr int IMAGE_WIDTH = 1200; /// 出力する画像の横幅
 constexpr int IMAGE_HEIGHT = 800; /// 出力する画像の高さ
 constexpr Real IMAGE_ASPECT = static_cast< Real >( IMAGE_WIDTH ) / static_cast< Real >( IMAGE_HEIGHT ); /// 画像のアスペクト比
-constexpr int IMAGE_SAMPLE_COUNT = 32; /// マルチサンプリングのサンプル数
+constexpr int IMAGE_SAMPLE_COUNT = 1; /// マルチサンプリングのサンプル数
 
 static constexpr Real degree_to_radian( Real degrre ) { return degrre * std::numbers::pi_v< Real > / 180._r; }
 static constexpr Real radian_to_degree( Real radian ) { return radian * 180._r / std::numbers::pi_v< Real >; }
@@ -43,13 +43,19 @@ struct Ray
 {
 	Vector origin;
 	Vector direction;
+
+	Vector at( Real t ) const
+	{
+		return origin + direction * t;
+	}
 };
 
 struct Object;
 
 struct Hit
 {
-	Real distance;
+	const Ray* ray;
+	Real distance; /// レイの始点から交差点までの距離
 	const Object* object;
 };
 
@@ -101,30 +107,41 @@ struct Sphere : public Object
 		const Vector oc = ray.origin - position;
 		float a = ray.direction.dot( ray.direction );
 		float b = 2._r * ray.direction.dot( oc );
-		float c = oc.dot( oc ) - std::pow( radius, 2 );
+		float c = oc.dot( oc ) - std::powf( radius, 2 );
 		float D = b * b - 4 * a * c;
 		
-		if ( D <= 0 )
+		if ( D < 0 )
 		{
 			return std::nullopt;
 		}
 
-		return Hit{ .distance = 0, .object = this };
+		Real t1 = ( -b - sqrtf( D ) ) / ( 2._r * a );
+		Real t2 = ( -b + sqrtf( D ) ) / ( 2._r * a );
+
+		Real t = ( t1 > 0 ) ? t1 : ( ( t2 > 0 ) ? t2 : -1 );
+		
+		if ( t < 0 )
+		{
+			return std::nullopt;
+		}
+
+		return Hit{ .ray = & ray, .distance = t, .object = this };
 	}
 };
 
 struct Scene
 {
 	std::vector< Sphere > objects = {
+		Sphere( Vector( -3.5_r, 0.0_r, 0 ), 0.25_r, Color( 1.0_r, 0.25_r, 0.25_r ) ),
 		Sphere( Vector( -2.5_r, 0.0_r, 0 ), 0.5_r, Color( 1.0_r, 0.25_r, 0.25_r ) ),
 		Sphere( Vector(  0.0_r, 0.0_r, 0 ), 1.0_r, Color( 0.25_r, 1.0_r, 0.25_r ) ),
-		Sphere( Vector(  2.5_r, 0.0_r, 0 ), 1.5_r, Color( 0.25_r, 0.25_r, 1.0_r ) ),
+		Sphere( Vector(  2.5_r, 0.0_r, 0 ), 2.0_r, Color( 0.25_r, 0.25_r, 1.0_r ) ),
 		Sphere( Vector(  0.0_r, -101.0_r, 0 ), 100._r, Color( 0.75_r, 0.75_r, 0.75_r ) ),
 	};
 
 	std::optional< Hit > intersect( const Ray& ray ) const
 	{
-		Hit hit{ .distance = std::numeric_limits< Real >::max(), .object = nullptr };
+		Hit hit{ .ray = & ray, .distance = std::numeric_limits< Real >::max(), .object = nullptr };
 
 		for ( const auto& object : objects )
 		{
@@ -218,8 +235,8 @@ int main( int, char** )
 
 			for ( int n = 0; n < IMAGE_SAMPLE_COUNT; n++ )
 			{
-				const Real y_offset = random_distribution( random_generator );
-				const Real x_offset = random_distribution( random_generator );
+				const Real y_offset = IMAGE_SAMPLE_COUNT > 1 ? random_distribution( random_generator ) : 0;
+				const Real x_offset = IMAGE_SAMPLE_COUNT > 1 ? random_distribution( random_generator ) : 0;
 
 				// カメラの中心からスクリーン上の y 座標に対応する位置までの回転角度 ( カメラの X 軸回転 )
 				const Real yr = ( camera_fov / 2._r ) - camera_fov * ( static_cast< Real >( y + y_offset ) / ( IMAGE_HEIGHT - 1 ) );
@@ -234,17 +251,20 @@ int main( int, char** )
 				const Eigen::AngleAxis< Real > rot_x( degree_to_radian( xr ), camera_up );
 				// std::cout << d << std::endl;
 
-				Ray ray{ camera_position, rot_x * rot_y * camera_direction };
+				Ray ray{ camera_position, ( rot_x * rot_y * camera_direction ).normalized() };
 
 				auto hit = scene.intersect( ray );
 
 				if ( hit )
 				{
-					color += hit.value().object->color;
+					Vector N = ( hit.value().ray->at( hit.value().distance ) - hit.value().object->position ).normalized();
+					color += 0.5_r * ( N + Vector( 1._r, 1._r, 1._r ) );
+
+					// color += hit.value().object->color;
 				}
 				else
 				{
-					color += Color( static_cast< Real >( x ) / ( IMAGE_WIDTH - 1 ), 0, static_cast< Real >( y ) / ( IMAGE_HEIGHT - 1 ) );
+					// color += Color( static_cast< Real >( x ) / ( IMAGE_WIDTH - 1 ), 0, static_cast< Real >( y ) / ( IMAGE_HEIGHT - 1 ) );
 				}
 			}
 
