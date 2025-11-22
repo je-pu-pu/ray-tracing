@@ -1,5 +1,8 @@
 # レイトレーシングの勉強
 
+![レンダリング結果](images/20251122-2132.png)
+![法線表示](images/20251122-2043.png)
+
 # 参考
 
 [レイをトレースしたい　第三回　球の描画 - Qiita](https://qiita.com/mosamosa/items/ffd89fb8a424dd83c415)
