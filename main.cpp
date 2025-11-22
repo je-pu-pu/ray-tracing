@@ -42,11 +42,20 @@ thread_local std::mt19937 random_generator{ random_device() };
 static constexpr Real degree_to_radian( Real degrre ) { return degrre * std::numbers::pi_v< Real > / 180._r; }
 static constexpr Real radian_to_degree( Real radian ) { return radian * 180._r / std::numbers::pi_v< Real >; }
 
+/**
+ * レイ
+ */
 struct Ray
 {
-	Vector origin;
-	Vector direction;
+	Vector origin;			/// レイの始点
+	Vector direction;		/// レイの方向ベクトル ( 正規化されていること )
 
+	/**
+	 * t に対応する位置を取得する
+	 * 
+	 * @param t 位置を求めるパラメータ ( レイの始点からの距離 )
+	 * @return t に対応する位置ベクトル
+	 */
 	Vector at( Real t ) const
 	{
 		return origin + direction * t;
@@ -55,21 +64,27 @@ struct Ray
 
 struct Object;
 
+/**
+ * レイと物体の交差情報
+ */
 struct Hit
 {
-	Real distance; // レイの始点から交差位置までの距離
-	Vector position; // 交差位置
-	Vector normal; // 交差位置の法線ベクトル
+	Real distance;			// レイの始点から交差位置までの距離
+	Vector position;		// 交差位置
+	Vector normal;			// 交差位置の法線ベクトル
 
-	const Object* object;
+	const Object* object;	// 交差した物体へのポインタ
 };
 
+/**
+ * 物体の基底クラス
+ */
 struct Object
 {
-	Vector position;
-	Color color;
-	Real roughness; /// 物体の粗さ (0.0: 完全鏡面反射, 1.0: 完全拡散反射)
-	bool emit_light = false; /// 光を放出するかどうか
+	Vector position;			/// 物体の位置
+	Color color;				///	物体の色
+	Real roughness;				/// 物体の粗さ ( 0.0 : 完全鏡面反射, 1.0 : 完全拡散反射 )
+	bool emit_light = false;	/// 光を放出するかどうか
 
 	Object( const Vector& p, const Color& c, Real rough, bool emit )
 		: position( p )
@@ -110,28 +125,44 @@ struct Sphere : public Object
 	/**
 	 * レイと球の交差判定
 	 * 
-	 * @todo 理解する
 	 * @param ray 判定するレイ
 	 * @return レイと球が交差しない場合は std::nullopt を返す。交差する場合は Hit 構造体を返す。
 	 */
 	std::optional< Hit > intersect( const Ray& ray ) const override
 	{
-		const Vector oc = ray.origin - position;
-		float a = ray.direction.dot( ray.direction );
-		float b = 2._r * ray.direction.dot( oc );
-		float c = oc.dot( oc ) - std::powf( radius, 2 );
-		float D = b * b - 4 * a * c;
+		const auto oc = ray.origin - position;				// 計算の便宜上、球の中心からレイの始点へのベクトルを求める
+		const auto a = ray.direction.dot( ray.direction );	// レイの方向ベクトルの大きさの2乗
+		const auto b = 2 * ray.direction.dot( oc );			// レイの方向ベクトルと oc ベクトルの内積に 2 をかけたもの
+		const auto c = oc.dot( oc ) - radius * radius;		// oc ベクトルの大きさの 2 乗から球の半径の 2 乗を引いたもの
+		const auto D = b * b - 4 * a * c;					// 交差判定の判別式
 		
+		// D が負の場合、レイと球は交差しない
 		if ( D < 0 )
 		{
 			return std::nullopt;
 		}
 
-		Real t1 = ( -b - sqrtf( D ) ) / ( 2._r * a );
-		Real t2 = ( -b + sqrtf( D ) ) / ( 2._r * a );
+		// 交差する場合、2 つの交点 t1, t2 を求める
+		auto t1 = ( -b - std::sqrt( D ) ) / ( 2 * a );
+		auto t2 = ( -b + std::sqrt( D ) ) / ( 2 * a );
 
-		Real t = ( t1 > 0) ? t1 : ( ( t2 > 0 ) ? t2 : -1 );
+		// 交点のうち、レイの始点から最も近い交点を採用する
+		auto t = -1._r;
+
+		if ( t1 > 0 && t2 > 0 )
+		{
+			t = std::min( t1, t2 );
+		}
+		else if ( t1 > 0 )
+		{
+			t = t1;
+		}
+		else if ( t2 > 0 )
+		{
+			t = t2;
+		}
 		
+		// 交点がレイの始点に近すぎる場合、交差しないものとみなす
 		if ( t < 0.001_r )
 		{
 			return std::nullopt;
@@ -143,19 +174,25 @@ struct Sphere : public Object
 	}
 };
 
+/**
+ * シーン
+ */
 struct Scene
 {
+	/// シーン内の物体リスト
 	std::vector< Sphere > objects = {
-		Sphere{ Vector( -3.5_r, 0.25_r, 0 ), 0.25_r, Color( 1.0_r, 0.5_r, 0.5_r ), 0._r, false },
-		Sphere{ Vector( -2.5_r, 0.5_r, 0 ), 0.5_r, Color( 1._r, 1._r, 1._r ), 0._r, false },
-		Sphere{ Vector( -1.5_r, 0.5_r, -1._r ), 0.5_r, Color( 1._r, 1._r, 1._r ), 1._r, false },
-		Sphere{ Vector( -0.5_r, 1._r, -2.5_r ), 1.0_r, Color( 0.5_r, 1.0_r, 0.5_r ), 0.05_r, false },
-		Sphere{ Vector(  2.5_r, 2.0_r, 0 ), 2.0_r, Color( 0.5_r, 0.5_r, 1.0_r ), 0.2_r, false },
+		Sphere{ Vector( -3.5_r, 0.25_r, 0     ), 0.25_r, Color( 1.0_r, 0.5_r, 0.5_r ), 0._r,   false },
+		Sphere{ Vector( -2.5_r, 0.5_r,  0     ), 0.5_r,  Color( 1._r,  1._r,  1._r  ), 0._r,   false },
+		Sphere{ Vector( -1.5_r, 0.5_r, -1._r  ), 0.5_r,  Color( 1._r,  1._r,  1._r  ), 1._r,   false },
+		Sphere{ Vector( -0.5_r, 1._r,  -2.5_r ), 1.0_r,  Color( 0.5_r, 1.0_r, 0.5_r ), 0.05_r, false },
+		Sphere{ Vector(  2.5_r, 2.0_r,  0     ), 2.0_r,  Color( 0.5_r, 0.5_r, 1.0_r ), 0.2_r,  false },
+		
 		Sphere{ Vector(  0.0_r, -10000.0_r, 0 ), 10000._r, Color( 1._r, 1._r, 1._r ), 1._r, false }, // 床
+
 		// Sphere{ Vector(  0.0_r, 15.0_r, 0._r ), 10._r, Color( 1._r, 1._r, 1._r ), 1._r, true }, // 光源
-		Sphere{ Vector(  0.0_r, 0.25_r, 1._r ), 0.25_r, Color( 1._r, 1._r, 1._r ), 1._r, true }, // 光源
-		Sphere{ Vector(  -3.0_r, 0.25_r, 2._r ), 0.25_r, Color( 1._r, 0._r, 0._r ), 1._r, true }, // 光源
-		Sphere{ Vector(  2.0_r, 0.25_r, 3._r ), 0.25_r, Color( 0._r, 0._r, 1._r ), 1._r, true }, // 光源
+		Sphere{ Vector(   0.0_r, 0.25_r, 1._r ), 0.25_r, Color( 1._r, 1._r, 1._r ), 1._r, true }, // 光源 ( 白 )
+		Sphere{ Vector(  -3.0_r, 0.25_r, 2._r ), 0.25_r, Color( 1._r, 0._r, 0._r ), 1._r, true }, // 光源 ( 赤 )
+		Sphere{ Vector(   2.0_r, 0.25_r, 3._r ), 0.25_r, Color( 0._r, 0._r, 1._r ), 1._r, true }, // 光源 ( 青 )
 	};
 
 	Scene()
@@ -189,20 +226,11 @@ struct Scene
 	}
 };
 
-static void save_ppm( const std::string& file_name, Color* image )
-{
-	std::ofstream ofs( file_name );
-
-	ofs << "P3\n" << IMAGE_WIDTH << " " << IMAGE_HEIGHT << "\n255\n";
-
-	for ( int n = 0; n < IMAGE_WIDTH * IMAGE_HEIGHT; n++ )
-	{
-		ofs << static_cast< int >( image[ n ].x() * 255 ) << " ";
-		ofs << static_cast< int >( image[ n ].y() * 255 ) << " ";
-		ofs << static_cast< int >( image[ n ].z() * 255 ) << "\n";
-	}
-}
-
+/**
+ * 画像を PNG 形式で保存する
+ * 
+ * @param image 保存する画像データ
+ */
 static void save_image( const Image& image )
 {
 	std::vector< std::uint8_t > data( IMAGE_WIDTH * IMAGE_HEIGHT * 3 );
@@ -243,11 +271,27 @@ Vector random_vector_in_unit_sphere()
 	while ( true );
 }
 
+/**
+ * 線形補間
+ * 
+ * @param t 補間パラメータ ( 0.0 から 1.0 の範囲 )
+ * @param a 
+ * @param b 
+ * @return 補間結果
+ */
 Vector lerp( Real t, Vector a, Vector b )
 {
-	return (1._r - t ) * a + t * b;
+	return ( 1._r - t ) * a + t * b;
 }
 
+/**
+ * シーンにレイを飛ばした結果の色を計算する
+ * 
+ * @param scene シーン
+ * @param ray レイ
+ * @param depth レイの反射回数
+ * @return 色
+ */
 Vector calc_color( const Scene& scene, const Ray ray, int depth = 0 )
 {
 	if ( depth >= 50 )
@@ -258,6 +302,7 @@ Vector calc_color( const Scene& scene, const Ray ray, int depth = 0 )
 
 	auto hit_opt = scene.intersect( ray );
 
+	// レイが何にも当たらなかった場合、背景色を返す
 	if ( ! hit_opt )
 	{
 		// return Color( 1._r, 0._r, 0._r ); // 背景色
@@ -286,7 +331,8 @@ Vector calc_color( const Scene& scene, const Ray ray, int depth = 0 )
 	}
 	*/
 
-	// return 0.5_r * ( normal + Vector{ 1._r, 1._r, 1._r } ); //  * hit.object->color;
+	// 法線を色に変換して返す
+	// return 0.5_r * ( hit.normal + Vector{ 1._r, 1._r, 1._r } ); //  * hit.object->color;
 
 	const auto normal = ( ( hit.position + hit.normal + random_vector_in_unit_sphere() * hit.object->roughness ) - hit.position ).normalized();
 
@@ -297,30 +343,18 @@ int main( int, char** )
 {
 	std::uniform_real_distribution< Real > random_distribution{ -0.5_r, 0.5_r };
 
-	/*
-	Vector a{ 1, 2, 3 };
-
-	a.normalize();
-
-	std::cout << "a dot a =" << a.dot( a ) << std::endl;
-	std::cout << "a * a =" << a.norm() * a.norm() << std::endl;
-
-	return 0;
-	*/
-
 	std::vector< Color > image{ IMAGE_WIDTH * IMAGE_HEIGHT };
 
 	Scene scene;
 
-	Vector camera_position{ 0, 1.5, 6 };
-	Vector camera_direction = Vector{ 0, 0, -3 }.normalized();
-	Vector camera_up = Vector{ -0.1_r, 1, 0 }.normalized();
-	Vector camera_right = camera_direction.cross( camera_up ).normalized();
+	/// カメラ設定
+	Vector camera_position{ 0, 1.5, 6 };									/// カメラの位置
+	Vector camera_direction = Vector{ 0, 0, -3 }.normalized();				/// カメラの向き
+	Vector camera_up = Vector{ -0.1_r, 1, 0 }.normalized();					/// カメラの上方向ベクトル
+	Vector camera_right = camera_direction.cross( camera_up ).normalized();	/// カメラの右方向ベクトル
 	camera_up = camera_right.cross( camera_direction ).normalized();
 
-	constexpr Real camera_fov = 60._r;
-
-	Vector screen_center{ 0.f, 0.f, 0.f };
+	constexpr Real camera_fov = 60._r;										/// カメラの画角
 
 	#pragma omp parallel for
 	for ( int y = 0; y < IMAGE_HEIGHT; y++ )
@@ -350,24 +384,10 @@ int main( int, char** )
 				// std::cout << xr << std::endl;
 
 				const Eigen::AngleAxis< Real > rot_x( degree_to_radian( xr ), camera_up );
-				// std::cout << d << std::endl;
 
 				Ray ray{ camera_position, ( rot_x * rot_y * camera_direction ).normalized() };
 
 				color += calc_color( scene, ray );
-
-				/*
-				if ( hit )
-				{
-					
-
-					// color += hit.value().object->color;
-				}
-				else
-				{
-					// color += Color( static_cast< Real >( x ) / ( IMAGE_WIDTH - 1 ), 0, static_cast< Real >( y ) / ( IMAGE_HEIGHT - 1 ) );
-				}
-				*/
 			}
 
 			image[ y * IMAGE_WIDTH + x ] = color / static_cast< Real >( IMAGE_SAMPLE_COUNT );

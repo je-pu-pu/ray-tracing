@@ -170,7 +170,11 @@ $$
 
 # 交点の選択
 
-2 つの解 $t_1,t_2$ が出た場合、通常、
+2 つの解 $t_1,t_2$ が出た場合、レイの始点から最も近い交点を採用する。
+
+$$
+t = \min(t_1, t_2), \quad \text{ただし } t_1 > 0, \ t_2 > 0
+$$
 
 # 交点座標の計算
 
@@ -182,6 +186,8 @@ $$
 
 # C++ ソースコード例
 
+main.cpp
+
 ```c++
 /**
  * レイと球の交差判定
@@ -191,22 +197,39 @@ $$
  */
 std::optional< Hit > intersect( const Ray& ray ) const override
 {
-	const Vector oc = ray.origin - position;
-	float a = ray.direction.dot( ray.direction );
-	float b = 2._r * ray.direction.dot( oc );
-	float c = oc.dot( oc ) - std::powf( radius, 2 );
-	float D = b * b - 4 * a * c;
+	const auto oc = ray.origin - position;				// 計算の便宜上、球の中心からレイの始点へのベクトルを求める
+	const auto a = ray.direction.dot( ray.direction );	// レイの方向ベクトルの大きさの2乗
+	const auto b = 2 * ray.direction.dot( oc );			// レイの方向ベクトルと oc ベクトルの内積に 2 をかけたもの
+	const auto c = oc.dot( oc ) - radius * radius;		// oc ベクトルの大きさの 2 乗から球の半径の 2 乗を引いたもの
+	const auto D = b * b - 4 * a * c;					// 交差判定の判別式
 	
+	// D が負の場合、レイと球は交差しない
 	if ( D < 0 )
 	{
 		return std::nullopt;
 	}
 
-	Real t1 = ( -b - sqrtf( D ) ) / ( 2._r * a );
-	Real t2 = ( -b + sqrtf( D ) ) / ( 2._r * a );
+	// 交差する場合、2 つの交点 t1, t2 を求める
+	auto t1 = ( -b - std::sqrt( D ) ) / ( 2 * a );
+	auto t2 = ( -b + std::sqrt( D ) ) / ( 2 * a );
 
-	Real t = ( t1 > 0) ? t1 : ( ( t2 > 0 ) ? t2 : -1 );
+	// 交点のうち、レイの始点から最も近い交点を採用する
+	auto t = -1._r;
+
+	if ( t1 > 0 && t2 > 0 )
+	{
+		t = std::min( t1, t2 );
+	}
+	else if ( t1 > 0 )
+	{
+		t = t1;
+	}
+	else if ( t2 > 0 )
+	{
+		t = t2;
+	}
 	
+	// 交点がレイの始点に近すぎる場合、交差しないものとみなす
 	if ( t < 0.001_r )
 	{
 		return std::nullopt;
