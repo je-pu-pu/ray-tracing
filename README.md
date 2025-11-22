@@ -1,4 +1,6 @@
-# レイトレーシング
+# レイトレーシングの勉強
+
+# 参考
 
 [レイをトレースしたい　第三回　球の描画 - Qiita](https://qiita.com/mosamosa/items/ffd89fb8a424dd83c415)
 [レイトレーシングの基本を言語化して理解したい。 - Qiita](https://qiita.com/mosamosa/items/8b49903e40638674ed1f)
