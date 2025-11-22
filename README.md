@@ -17,18 +17,18 @@
 
 # 球の方程式
 
-球の中心が原点 ( 0, 0, 0 ) の球は以下の式で表すことができる。
+球の中心が原点 $( 0, 0, 0 )$ にある場合、球面上の点 $( x, y, z )$ は次の方程式を満たす。
 
 $$
 x^2 + y^2 + z^2 = r^2
 $$
 
-* $( x, y, z )$ : 球の表面上の座標
+* $( x, y, z )$ : 球面上の点の座標
 * $r$ : 球の半径
 
 ---
 
-球の中心の座標を ( cx, cy, cz ) とすると、以下の式で表すことができる。
+球の中心を $( cx, cy, cz )$ とすると、以下の式で表すことができる。
 
 $$
 ( x - cx )^2 + ( y - cy )^2 + ( z - cz )^2 = r^2
@@ -39,19 +39,31 @@ $$
 
 ---
 
-ベクトルを使うと、以下の式で表すことができる。
+ベクトルを使うと、よりコンパクトに、以下の式で表すことができる。
 
 $$
 ( \vec{p} - \vec{c} ) \cdot ( \vec{p} - \vec{c} ) = r^2
-\\
-\|\vec{p} - \vec{c}\|^2 = r^2
-\\
-\|\vec{p} - \vec{c}\| = r
-
 $$
 
 * $\vec{p}$ : 球の表面上の座標
 * $\vec{c}$ : 球の中心の座標
+
+
+また、上記の式は、ベクトルの内積の性質より、ベクトルの大きさ（ノルム）使って次のように書き換えられる。
+
+$$
+\|\vec{p} - \vec{c}\|^2 = r^2
+$$
+
+これは、球面上の点 $\vec{p}$ の球の中心 $\vec{c}$ からの距離の 2 乗が、球の半径の 2 乗に等しいことを表している。  
+ベクトルの大きさ（ノルム）は常に非負なので、両辺の平方根を取ることで
+
+$$
+\|\vec{p} - \vec{c}\| = r
+$$
+
+が得られる。  
+これは「中心からの距離がちょうど $r$ の点全体」が球面であることを意味している。
 
 ---
 
@@ -70,17 +82,18 @@ $$
 
 # 球の方程式にレイの方程式を代入する
 
-レイを始点 $\vec{o}$ から、方向 $\vec{d}$ へ、距離 $t$ だけ進め、  
-そのレイ上の点 $P(t)$ が、球の表面上の座標 $\vec{p}$ と一致する場合、  
-レイと球は交差していると言える。
+レイを始点 $\vec{o}$ から、方向 $\vec{d}$ へ、距離 $t$ だけ進めた点 $P(t)$ が球面上にある場合、  
+レイと球は交差していることになる。
+
+このとき、球の方程式の $\vec{p}$ を $P(t)$ に置き換えると、
 
 $$
-\| \vec{p} - \vec{c} \| ^2 = r^2 \\
-= \| P(t) - \vec{c} \| ^2 = r^2 \\
-= \| \vec{o} + t \vec{d} - \vec{c} \| ^2 = r^2
+\| \vec{p} - \vec{c} \|^2 = r^2 \\
+\Rightarrow \| P(t) - \vec{c} \|^2 = r^2 \\
+\Rightarrow \| \vec{o} + t \vec{d} - \vec{c} \|^2 = r^2
 $$
 
-ここで、簡単のために
+ここで、計算を分かりやすくするために、
 
 $$
 \vec{oc} = \vec{o} - \vec{c}
@@ -116,4 +129,91 @@ $$
 t^2( \vec{d} \cdot \vec{d} ) \quad + \quad 2 t ( \vec{oc} \cdot \vec{d} ) \quad + \quad \vec{oc} \cdot \vec{oc} - r^2 \quad = \quad0
 $$
 
-> 「t についての二次方程式」というのは、未知数（解きたい変数）が t であり、その t が 2 乗で登場する方程式
+> t についての二次方程式  
+> というのは、未知数（解きたい変数）が t であり、その t が 2 乗で登場する方程式
+
+これを一般的な二次方程式の形にすると、
+
+$$
+at^2 \quad + \quad bt \quad + \quad c \quad = \quad 0
+$$
+
+で、各定数は以下のように定義される。
+
+$$
+\begin{cases}
+    a = \vec{d} \cdot \vec{d} \\
+    b = 2 ( \vec{oc} \cdot \vec{d} ) \\
+    c = \vec{oc} \cdot \vec{oc} - r^2
+\end{cases}
+$$
+
+# 交差の有無の判定
+
+二次方程式の解の公式は以下の通り。
+
+$$
+t = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
+$$
+
+ここで、判定式
+
+$$
+\Delta = b^2 - 4ac
+$$
+
+を考える。
+
+* $\Delta < 0$ : 実数解なし : レイは球と交差していない
+* $\Delta = 0$ : 1 つの解がある : レイは球と接している
+* $\Delta > 0$ : 2 つの解がある : レイは球を貫通している（交点が２つある）
+
+# 交点の選択
+
+2 つの解 $t_1,t_2$ が出た場合、通常、
+
+# 交点座標の計算
+
+交点のパラメータ $t$ が求まったら、レイの方程式に代入して座標を求める。
+
+$$
+P(t) = \vec{o} + t\vec{d}
+$$
+
+# C++ ソースコード例
+
+```c++
+/**
+ * レイと球の交差判定
+ * 
+ * @param ray 判定するレイ
+ * @return レイと球が交差しない場合は std::nullopt を返す。交差する場合は Hit 構造体を返す。
+ */
+std::optional< Hit > intersect( const Ray& ray ) const override
+{
+	const Vector oc = ray.origin - position;
+	float a = ray.direction.dot( ray.direction );
+	float b = 2._r * ray.direction.dot( oc );
+	float c = oc.dot( oc ) - std::powf( radius, 2 );
+	float D = b * b - 4 * a * c;
+	
+	if ( D < 0 )
+	{
+		return std::nullopt;
+	}
+
+	Real t1 = ( -b - sqrtf( D ) ) / ( 2._r * a );
+	Real t2 = ( -b + sqrtf( D ) ) / ( 2._r * a );
+
+	Real t = ( t1 > 0) ? t1 : ( ( t2 > 0 ) ? t2 : -1 );
+	
+	if ( t < 0.001_r )
+	{
+		return std::nullopt;
+	}
+
+	const auto hit_position = ray.at( t );
+
+	return Hit{ .distance = t, .position = hit_position , .normal = ( hit_position - position ).normalized(), .object = this };
+}
+```
