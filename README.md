@@ -89,7 +89,13 @@ $$
 
 $$
 \| \vec{p} - \vec{c} \|^2 = r^2 \\
+$$
+
+$$
 \Rightarrow \| P(t) - \vec{c} \|^2 = r^2 \\
+$$
+
+$$
 \Rightarrow \| \vec{o} + t \vec{d} - \vec{c} \|^2 = r^2
 $$
 
